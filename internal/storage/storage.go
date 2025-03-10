@@ -4,18 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 )
 
 type Storage struct {
 	db *sql.DB
 }
+type Creat interface {
+	CreareNewMessage(context.Context, string) error
+}
 
-func NewOpen() (*sql.DB, error) {
-
-	err := godotenv.Load("/home/andrey/GolandProjects/TestKafka/.env")
+func New() (*Storage, error) {
+	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatal("Ошибка загрузки .env файла")
 	}
@@ -33,11 +38,28 @@ func NewOpen() (*sql.DB, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return db, nil
-
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Ошибка проверки соединения с БД:", err)
+	}
+	return &Storage{
+		db: db,
+	}, nil
 }
+
 func (s *Storage) Close() error {
 	return s.db.Close()
+}
+
+func (s *Storage) Migrate(bool migrate.MigrationDirection) error {
+	migrations := &migrate.FileMigrationSource{
+		Dir: ".",
+	}
+	_, err := migrate.Exec(s.db, "postgres", migrations, bool)
+	if err != nil {
+		return fmt.Errorf("error for migrate: %v", err)
+	}
+	return nil
 }
 
 func (s *Storage) CreareNewMessage(cxt context.Context, message string) error {
